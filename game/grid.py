@@ -44,8 +44,9 @@ def cube_linedraw(start, end):
         results.append((round(x), round(y), round(z)))
     return results
 
-def is_orthogonal(start, end):  # <-- ADD THIS FUNCTION
+def is_orthogonal(start, end):
     dx = end[0] - start[0]
     dy = end[1] - start[1]
     dz = end[2] - start[2]
-    return (abs(dx) == abs(dy)) or (abs(dy) == abs(dz)) or (abs(dz) == abs(dx))
+    # In cube coordinates, a move is orthogonal when exactly one axis is unchanged
+    return dx == 0 or dy == 0 or dz == 0

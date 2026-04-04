@@ -6,10 +6,12 @@ class GameState:
         self.grid = HexGrid(radius=4)
         self.current_player = "Red"
         self.win_condition = None
+        self.pending_true_win = None   # Set when a Sentry reaches a hold hex; confirmed next turn
         self.initialize_pieces()
+        # True Win: advance your Sentry into the opponent's Caster ring (their inner defense)
         self.hold_hexes = {
-            "White": [(0, -4, 4), (-4, 0, 4), (4, 0, -4)],  # Red's side
-            "Red": [(0, 4, -4), (-4, 4, 0), (4, -4, 0)]     # White's side
+            "White": [(-1, -3, 4), (0, -3, 3), (1, -4, 3)],   # Red's Caster starting hexes
+            "Red":   [(1,  3, -4), (0,  3, -3), (-1, 4, -3)],  # White's Caster starting hexes
         }
 
     def initialize_pieces(self):
@@ -71,15 +73,15 @@ class GameState:
         self.grid.place_piece((2, -3, 1), "Shield", "Red")
         self.grid.place_piece((3, -4, 1), "Shield", "Red")
 
-    def handle_move(self, piece_type, start_hex, target_hex):
+    def handle_move(self, start_hex, target_hex):
         start = tuple(start_hex)
         target = tuple(target_hex)
         piece = self.grid.get_piece(start)
-        
+
         if not piece or piece["owner"] != self.current_player:
             return {"success": False, "message": "Invalid piece selection"}
 
-        # Validate move pattern
+        piece_type = piece["type"]
         validators = {
             "Sentry": validate_sentry,
             "Striker": validate_striker,
@@ -90,44 +92,90 @@ class GameState:
         if not validators[piece_type](start, target, self.grid, self.current_player):
             return {"success": False, "message": "Invalid move"}
 
-        # Check target space occupation
         target_piece = self.grid.get_piece(target)
         if target_piece and target_piece["owner"] == self.current_player:
             return {"success": False, "message": "Can't move to ally position"}
 
-        # Perform move
+        # Detect enemy Sentry capture BEFORE the board changes (target or mid-path jump)
+        path = cube_linedraw(start, target)
+        captured_sentry = (
+            target_piece is not None
+            and target_piece["owner"] != self.current_player
+            and target_piece["type"] == "Sentry"
+        )
+        if not captured_sentry:
+            for hex in path[1:-1]:
+                p = self.grid.get_piece(hex)
+                if p and p["owner"] != self.current_player and p["type"] == "Sentry":
+                    captured_sentry = True
+                    break
+
+        # Execute move
         self.grid.remove_piece(start)
         self.grid.place_piece(target, piece_type, self.current_player)
-
-        # Check captures along path
-        path = cube_linedraw(start, target)
-        for hex in path[1:-1]:  # Exclude start and end positions
-            piece = self.grid.get_piece(hex)
-            if piece and piece["owner"] != self.current_player:
+        for hex in path[1:-1]:
+            p = self.grid.get_piece(hex)
+            if p and p["owner"] != self.current_player:
                 self.grid.remove_piece(hex)
 
-        # Check win conditions
-        if self.check_win_conditions(target):
-            return {"success": True, "game_over": True, "winner": self.current_player}
+        opponent = "White" if self.current_player == "Red" else "Red"
 
-        # Switch turns
-        self.current_player = "White" if self.current_player == "Red" else "Red"
-        return {"success": True}
+        # Normal win: enemy Sentry captured
+        if captured_sentry:
+            self.win_condition = self.current_player
+            return {"success": True, "game_over": True, "winner": self.current_player, "win_type": "normal"}
 
-    def check_win_conditions(self, target_hex):
-        # Immediate win condition (captured enemy Sentry)
-        target_piece = self.grid.get_piece(target_hex)
-        if target_piece and target_piece["type"] == "Sentry":
-            return True
+        # True win confirmation: opponent's Sentry was in a hold hex last turn and survived our move
+        if self.pending_true_win == opponent and self._sentry_in_hold_for(opponent):
+            self.win_condition = opponent
+            self.pending_true_win = None
+            return {"success": True, "game_over": True, "winner": opponent, "win_type": "true"}
 
-        # True victory condition (Sentry in enemy hold hex)
+        # Reset pending — either it was just confirmed above, or the threat was neutralised
+        self.pending_true_win = None
+
+        # Check if current player just landed their Sentry on a hold hex
+        if self._sentry_in_hold_for(self.current_player):
+            self.pending_true_win = self.current_player
+
+        self.current_player = opponent
+        result = {"success": True}
+        if self.pending_true_win:
+            result["pending_true_win"] = self.pending_true_win
+        return result
+
+    def _sentry_in_hold_for(self, player):
+        """Return True if the given player's Sentry is on one of their hold hexes."""
         sentry_pos = next(
-            (coords for coords, piece in self.grid.pieces.items()
-             if piece["type"] == "Sentry" and piece["owner"] == self.current_player),
+            (coords for coords, p in self.grid.pieces.items()
+             if p["type"] == "Sentry" and p["owner"] == player),
             None
         )
-        
-        if sentry_pos and sentry_pos in self.hold_hexes[self.current_player]:
-            return True
+        return sentry_pos is not None and sentry_pos in self.hold_hexes[player]
 
-        return False
+    def get_valid_moves(self, start_hex):
+        start = tuple(start_hex)
+        piece = self.grid.get_piece(start)
+        if not piece or piece["owner"] != self.current_player:
+            return []
+
+        validators = {
+            "Sentry": validate_sentry,
+            "Striker": validate_striker,
+            "Caster": validate_caster,
+            "Shield": validate_shield
+        }
+        validator = validators.get(piece["type"])
+        if not validator:
+            return []
+
+        valid = []
+        for hex in self.grid.tiles:
+            if hex == start:
+                continue
+            target_piece = self.grid.get_piece(hex)
+            if target_piece and target_piece["owner"] == self.current_player:
+                continue
+            if validator(start, hex, self.grid, self.current_player):
+                valid.append(list(hex))
+        return valid

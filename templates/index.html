@@ -6,8 +6,24 @@
 </head>
 <body>
     <div id="game-container">
+        <h1 id="title">Sovereign's Quarrel</h1>
+        <div id="status">Red's turn — select a piece</div>
         <canvas id="gameCanvas" width="800" height="800"></canvas>
-        <div id="status">Current Player: Red</div>
+        <button id="resetBtn">New Game</button>
+        <div id="legend">
+            <div class="legend-section">
+                <strong>Pieces</strong>
+                <div class="legend-row"><span class="legend-icon sentry"></span> Sentry — move 1-2 any direction. <em>Protect it. Advance it to win.</em></div>
+                <div class="legend-row"><span class="legend-icon caster"></span> Caster ▲ — move up to 5 hexes, can jump 1 enemy to capture. Cannot jump friendlies.</div>
+                <div class="legend-row"><span class="legend-icon striker"></span> Striker ◆ — move exactly 3 in a straight line, jumps friendlies, captures 1 enemy along the way.</div>
+                <div class="legend-row"><span class="legend-icon shield"></span> Shield ■ — move 1 hex orthogonally. Jump an adjacent enemy to capture it (must have empty hex beyond).</div>
+            </div>
+            <div class="legend-section">
+                <strong>Win conditions</strong>
+                <div class="legend-row">⚔ <strong>Normal win:</strong> Capture the opponent's Sentry.</div>
+                <div class="legend-row">★ <strong>True win:</strong> Move your Sentry into any of the opponent's Caster hexes (inner ring around their Sentry) and survive their next turn.</div>
+            </div>
+        </div>
     </div>
     <script src="{{ url_for('static', filename='js/game.js') }}"></script>
 </body>

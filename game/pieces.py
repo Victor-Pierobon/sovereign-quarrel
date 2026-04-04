@@ -20,20 +20,30 @@ def validate_shield(start, target, grid, current_player):
     return False
 
 def validate_striker(start, target, grid, current_player):
-    if cube_distance(start, target) != 3:
+    dist = cube_distance(start, target)
+    if dist < 1 or dist > 3:
         return False
-    
+
+    # Must move in a straight line along one of the 6 hex axes
+    if not is_orthogonal(start, target):
+        return False
+
+    # Target must always be empty — Striker jumps over pieces, never lands on them
+    if grid.get_piece(target):
+        return False
+
     path = cube_linedraw(start, target)
     enemy_count = 0
-    
     for hex in path[1:-1]:
         piece = grid.get_piece(hex)
         if piece:
             if piece["owner"] != current_player:
                 enemy_count += 1
-            elif piece["owner"] == current_player:
-                continue  # Can jump friendlies
-    return enemy_count <= 1 and not grid.get_piece(target)
+                if enemy_count > 1:
+                    return False  # Can only jump one enemy per move
+            # Allied pieces are jumped over freely
+
+    return True
 
 def validate_caster(start, target, grid, current_player):
     dist = cube_distance(start, target)
@@ -54,11 +64,18 @@ def validate_caster(start, target, grid, current_player):
 
 def validate_sentry(start, target, grid, current_player):
     dist = cube_distance(start, target)
-    if dist not in (1, 2):
+    if dist < 1 or dist > 2:
         return False
-    
+
+    # Target must be empty (Sentry captures by jumping, not by landing)
+    if grid.get_piece(target):
+        return False
+
     path = cube_linedraw(start, target)
+    # Allied pieces block movement; enemy pieces can be jumped (captured)
     for hex in path[1:-1]:
-        if grid.get_piece(hex):
+        piece = grid.get_piece(hex)
+        if piece and piece["owner"] == current_player:
             return False
-    return not grid.get_piece(target)
+
+    return True
