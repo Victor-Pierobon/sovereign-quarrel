@@ -43,6 +43,19 @@ Red takes the first turn(Caera says in the novel that tradicionaly white goes se
 
 A Python-based web adaptation of the strategic board game from *The Beginning After The End*.
 
+## How to Run
+
+Requires Python 3.12+.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+Then open http://localhost:5000 in your browser.
+
 
 
 ## Author
